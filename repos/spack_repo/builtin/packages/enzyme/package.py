@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
+import os
+
 from spack_repo.builtin.build_systems.cmake import CMakePackage
 
 from spack.package import *
@@ -58,7 +60,10 @@ class Enzyme(CMakePackage):
     depends_on("cmake@3.13:", type="build")
 
     def cmake_args(self):
-        llvm_dir = self.llvm_config("--cmakedir", output=str).strip()
+        llvm_dir = join_path(self.llvm_prefix, "lib", "cmake", "llvm")
+        if not os.path.isdir(llvm_dir):
+            # e.g. Debian/Ubuntu system LLVM registered at prefix /usr
+            llvm_dir = self.llvm_config("--cmakedir", output=str).strip()
         return [self.define("LLVM_DIR", llvm_dir)]
 
     @property
@@ -71,13 +76,23 @@ class Enzyme(CMakePackage):
 
     @property
     def llvm_config(self):
-        versioned_executable = f"llvm-config-{self.llvm_spec.version.up_to(1)}"
-        return which(
-            versioned_executable,
+        llvm = self.llvm_spec
+        llvm_config = which(
+            f"llvm-config-{llvm.version.up_to(1)}",
             "llvm-config",
-            path=str(self.llvm_prefix.bin),
+            path=str(llvm.prefix.bin),
             required=True,
         )
+        # A shared prefix such as /usr can hold several LLVMs; make sure this llvm-config
+        # belongs to the one in the spec. llvm-amdgpu is versioned by ROCm, so skip it.
+        if llvm.satisfies("llvm"):
+            found = Version(llvm_config("--version", output=str).strip())
+            if found.up_to(1) != llvm.version.up_to(1):
+                raise InstallError(
+                    f"{llvm_config.path} reports LLVM {found}, "
+                    f"but the spec requires {llvm.version}"
+                )
+        return llvm_config
 
     @property
     def llvm_version(self):
