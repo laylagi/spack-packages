@@ -63,12 +63,7 @@ class Enzyme(CMakePackage):
 
     @property
     def llvm_spec(self):
-        spec = self.spec
-        if spec.satisfies("%libllvm=llvm"):
-            return spec["llvm"]
-        if spec.satisfies("%libllvm=llvm-amdgpu"):
-            return spec["llvm-amdgpu"]
-        raise InstallError("Unknown 'libllvm' provider!")
+        return self.spec["libllvm"]
 
     @property
     def llvm_prefix(self):
